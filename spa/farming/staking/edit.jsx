@@ -1,347 +1,800 @@
-var StakingEdit = React.createClass({
-    requiredScripts: [
-        'spa/loaderMinimino.jsx',
-        'spa/uniswapTokenPicker.jsx'
-    ],
-    getInitialState() {
-        var state = {
-            tiers: [],
-            pairs: [],
-            blockNumber: (this.props.blockTiers && Object.values(this.props.blockTiers)[0].averages[1]) || null
-        };
-        /*this.props && this.props.stakingData && this.props.stakingData.tiers && this.props.stakingData.tiers.forEach(it => state.tiers.push(it));
-        this.props && this.props.stakingData && this.props.stakingData.pairs && this.props.stakingData.pairs.forEach(it => state.pairs.push(it));*/
-        return state;
-    },
-    deleteTier(e) {
-        e && e.preventDefault && e.preventDefault(true) && e.stopPropagation && e.stopPropagation(true);
-        var i = parseInt(e.currentTarget.dataset.index);
-        var deleted = this.state.tiers[i];
-        this.state.tiers.splice(i, 1);
-        var _this = this;
-        this.setState({ tiers: this.state.tiers, tier: deleted.tierKey, blockNumber: deleted.tierKey === 'Custom' ? deleted.blockNumber : null }, function () {
-            _this.customBlockNumber && (_this.customBlockNumber.value = deleted.blockNumber);
-            _this.rewardSplitTranchesInput && (_this.rewardSplitTranchesInput.value = deleted.rewardSplitTranche);
-            !_this.customBlockNumber && (_this.domRoot.children().find('input[type="radio"][data-value="' + deleted.blockNumber + '"]')[0].checked = true);
-            _this.hardCapInput.value = window.fromDecimals(deleted.hardCap, _this.props.element.decimals);
-            _this.minCapInput.value = window.fromDecimals(deleted.minCap, _this.props.element.decimals);
-            _this.rewardPercentageInput.value = window.formatMoney(deleted.percentage);
-        });
-    },
-    addTier(e) {
-        e && e.preventDefault && e.preventDefault(true) && e.stopPropagation && e.stopPropagation(true);
-        this.emit('message');
-        var hardCap = '0';
-        try {
-            hardCap = window.toDecimals(this.hardCapInput.value.split(',').join(''), this.props.element.decimals);
-        } catch (e) {
+function StakingEdit(props) {
+    console.log('Manlio Cassarà');
+    const [currentBlockNumber, setCurrentBlockNumber] = useState(0);
+    const [selectedRewardToken, setSelectedRewardToken] = useState(null);
+    const [selectedFarmingType, setSelectedFarmingType] = useState(null);
+    const [selectedHost, setSelectedHost] = useState("");
+    const [hostWalletAddress, setHostWalletAddress] = useState(null);
+    const [hostDeployedContract, setHostDeployedContract] = useState(null);
+    const [deployContract, setDeployContract] = useState(null);
+    const [useDeployedContract, setUseDeployedContract] = useState(false);
+    const [hasLoadBalancer, setHasLoadBalancer] = useState(false);
+    const [pinnedSetupIndex, setPinnedSetupIndex] = useState(null);
+    const [byMint, setByMint] = useState(false);
+    const [freeLiquidityPoolToken, setFreeLiquidityPoolToken] = useState(null);
+    const [freeRewardPerBlock, setFreeRewardPerBlock] = useState(0);
+    const [lockedPeriod, setLockedPeriod] = useState(null);
+    const [lockedStartBlock, setLockedStartBlock] = useState(0);
+    const [lockedMainToken, setLockedMainToken] = useState(null);
+    const [lockedMaxLiquidity, setLockedMaxLiquidity] = useState(0);
+    const [lockedRewardPerBlock, setLockedRewardPerBlock] = useState(0);
+    const [lockedSecondaryToken, setLockedSecondaryToken] = useState(null);
+    const [lockedHasPenaltyFee, setLockedHasPenaltyFee] = useState(false);
+    const [lockedPenaltyFee, setLockedPenaltyFee] = useState(0);
+    const [lockedIsRenewable, setLockedIsRenewable] = useState(false);
+    const [lockedRenewTimes, setLockedRenewTimes] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [isAdd, setIsAdd] = useState(false);
+    const [isEdit, setIsEdit] = useState(false);
+    const [editIndex, setEditIndex] = useState(null);
+    const [isAddLoadBalancer, setIsAddLoadBalancer] = useState(false);
+    const [isDeploy, setIsDeploy] = useState(false);
+    const [deployLoading, setDeployLoading] = useState(false);
+    const [deployStep, setDeployStep] = useState(0);
+    const [deployData, setDeployData] = useState(null);
+    const [extensionPayload, setExtensionPayload] = useState("");
+
+    console.log('Ninni Cassarà');
+    useEffect(() => {
+        if (props.farmingContract?.rewardToken) {
+            setSelectedRewardToken(props.farmingContract.rewardToken);
         }
-        if (isNaN(parseInt(hardCap)) || parseInt(hardCap) <= 0) {
-            return this.emit('message', 'Hard Cap must be a valid positive number', 'error');
-        }
-        var minCap = '0';
-        try {
-            minCap = window.toDecimals(this.minCapInput.value.split(',').join(''), this.props.element.decimals);
-        } catch (e) {
-        }
-        if (isNaN(parseInt(minCap)) || parseInt(minCap) <= 0) {
-            return this.emit('message', 'Min Cap must be a valid positive number', 'error');
-        }
-        var blockNumber = '0';
-        try {
-            blockNumber = (this.customBlockNumber ? this.customBlockNumber.value : this.domRoot.children().find('input[type="radio"]:checked')[0].dataset.value).split(',').join('');
-        } catch (e) {
-        }
-        if (isNaN(parseInt(blockNumber)) || parseInt(blockNumber) <= 0) {
-            return this.emit('message', 'Block Limit must be a valid positive number', 'error');
-        }
-        var rewardSplitTranche = 0;
-        try {
-            rewardSplitTranche = this.rewardSplitTranchesInput ? this.rewardSplitTranchesInput.value : this.props.blockTiers[this.state.tier].weeks;
-        } catch (e) {
-        }
-        if (this.rewardSplitTranchesInput && (isNaN(parseInt(rewardSplitTranche)) || parseInt(rewardSplitTranche) <= 0)) {
-            return this.emit('message', 'Split amount must be a valid positive number', 'error');
-        }
-        var percentage = 0;
-        try {
-            percentage = parseFloat(this.rewardPercentageInput.value.split(',').join(''));
-        } catch (e) {
-        }
-        if (isNaN(percentage) || percentage <= 0) {
-            return this.emit('message', 'Percentage must be a positive number', 'error');
-        }
-        var rewardTokenAddress;
-        try {
-            rewardTokenAddress = this.rewardTokenPicker && this.rewardTokenPicker.state && !isNaN(this.rewardTokenPicker.state.selected) && this.state.tokensList[this.rewardTokenPicker.state.key][this.rewardTokenPicker.state.selected].address;
-        } catch (e) {
-        }
-        if (!rewardTokenAddress) {
-            return this.emit('message', 'Reward Token is mandatory', 'error');
-        }
-        var mainTokenAddress;
-        try {
-            mainTokenAddress = this.mainTokenPicker && this.mainTokenPicker.state && !isNaN(this.mainTokenPicker.state.selected) && this.state.tokensList[this.mainTokenPicker.state.key][this.mainTokenPicker.state.selected].address;
-        } catch (e) {
-        }
-        if (!mainTokenAddress) {
-            return this.emit('message', 'Main Token is mandatory', 'error');
-        }
-        if(!this.state || !this.state.pairs || this.state.pairs.length === 0) {
-            return this.emit('message', 'You must choose at least a pair', 'error');
-        }
-        var tiers = (this.state && this.state.tiers) || [];
-        tiers.push({
-            hardCap,
-            minCap,
-            blockNumber,
-            percentage,
-            time: window.calculateTimeTier(blockNumber),
-            tierKey: window.getTierKey(blockNumber),
-            rewardSplitTranche
-        });
-        var _this = this;
-        this.setState({ tiers, blockNumber: null, tier: null }, function () {
-            _this.customBlockNumber && (_this.customBlockNumber.value = '');
-            _this.rewardSplitTranchesInput && (_this.rewardSplitTranchesInput.value = '');
-            _this.hardCapInput.value = '';
-            _this.minCapInput.value = '';
-            _this.rewardPercentageInput.value = '';
-            _this.onTierChange({
-                currentTarget: {
-                    value: Object.keys(_this.props.blockTiers)[0]
-                }
+        if (currentBlockNumber === 0) {
+            window.web3.eth.getBlockNumber().then((blockNumber) => {
+                setCurrentBlockNumber(blockNumber);
+                setLockedStartBlock(blockNumber);
             });
-        });
-    },
-    onTierChange(e) {
-        e && e.preventDefault && e.preventDefault(true) && e.stopPropagation && e.stopPropagation(true);
-        var blockNumber = this.props.blockTiers[e.currentTarget.value];
-        blockNumber = blockNumber ? blockNumber.averages[1] : null;
-        this.setState({ blockNumber, tier: e.currentTarget.value });
-    },
-    onBlockLimitChange(e) {
-        this.setState({ blockNumber: parseInt(e.currentTarget.dataset.value) });
-    },
-    onNewPair(newPair) {
-        if (!newPair) {
-            return;
         }
-        this.pairPicker && this.pairPicker.setState({ selected: null });
-        var mainTokenAddress = this.mainTokenPicker && this.mainTokenPicker.state && !isNaN(this.mainTokenPicker.state.selected) && this.state.tokensList[this.mainTokenPicker.state.key][this.mainTokenPicker.state.selected].address;
-        if (newPair.address === mainTokenAddress) {
-            this.mainTokenPicker.setState({ selected: null });
-        }
-        var pairs = (this.state && this.state.pairs) || [];
-        for (var pair of pairs) {
+    }, []);
+    console.log('Cassarà Ninni');
 
-            if (pair.address === newPair.address) {
-                return;
-            }
-        }
-        pairs.push(newPair);
-        this.setState({ pairs });
-    },
-    onNewMainToken(mainToken) {
-        if (!mainToken) {
-            return;
-        }
-        var pairs = (this.state && this.state.pairs) || [];
-        var found;
-        for (var i = 0; i < pairs.length; i++) {
-            var pair = pairs[i];
-            if (pair.address === mainToken.address) {
-                found = i;
-                break;
-            }
-        }
-        !isNaN(found) && pairs.splice(found, 1);
-        this.setState({ pairs });
-    },
-    deletePair(e) {
-        e && e.preventDefault && e.preventDefault(true) && e.stopPropagation && e.stopPropagation(true);
-        this.state.pairs.splice(parseInt(e.currentTarget.dataset.index), 1);
-        this.setState({ pairs: this.state.pairs });
-    },
-    proposeNewStaking(e) {
-        e && e.preventDefault && e.preventDefault(true) && e.stopPropagation && e.stopPropagation(true);
-        this.emit('message');
-        var startBlock = parseInt(this.startBlockInput.value);
-        if (isNaN(startBlock) || startBlock < 0) {
-            return this.emit('message', 'Start Block must be a number greater than 0', 'error');
-        }
-        var endBlock = parseInt(this.endBlockInput.value);
-        if (isNaN(endBlock) || endBlock < 0) {
-            return this.emit('message', 'End Block must be a number greater than 0', 'error');
-        }
-        var pairs = (this.state && this.state.pairs || []);
-        if (pairs.length === 0) {
-            return this.emit('message', 'Please select at least a pair', 'error');
-        }
-        var tiers = (this.state && this.state.tiers || []);
-        if (tiers.length === 0) {
-            return this.emit('message', 'You must add at least a tier', 'error');
-        }
-        for (var tier of tiers) {
-            tier.timeWindow = tier.blockNumber;
-            var percentage = window.calculateMultiplierAndDivider(tier.percentage);
-            tier.rewardMultiplier = percentage[0];
-            tier.rewardDivider = percentage[1];
-        }
-        var mainTokenAddress = this.mainTokenPicker && this.mainTokenPicker.state && !isNaN(this.mainTokenPicker.state.selected) && this.state.tokensList[this.mainTokenPicker.state.key][this.mainTokenPicker.state.selected].address;
-        if (!mainTokenAddress) {
-            return this.emit('message', 'Main Token is mandatory', 'error');
-        }
-        for (var pair of pairs) {
-            if (pair.address === mainTokenAddress) {
-                return this.emit('message', 'Main Token cannot be in the pair list', 'error');
-            }
-        }
-        var rewardTokenAddress = this.rewardTokenPicker && this.rewardTokenPicker.state && !isNaN(this.rewardTokenPicker.state.selected) && this.state.tokensList[this.rewardTokenPicker.state.key][this.rewardTokenPicker.state.selected].address;
-        if (!rewardTokenAddress) {
-            return this.emit('message', 'Reward Token is mandatory', 'error');
-        }
-        window.stake(this, startBlock, endBlock, mainTokenAddress, rewardTokenAddress, pairs.map(it => it.address), tiers);
-    },
-    onHardCapChange(e) {
-        e && e.preventDefault && e.preventDefault(true) && e.stopPropagation && e.stopPropagation(true);
-        this.hardCapChangeTimeout && window.clearTimeout(this.hardCapChangeTimeout);
-        var _this = this;
-        this.hardCapChangeTimeout = window.setTimeout(function () {
-            var value = window.formatMoney(parseFloat(_this.hardCapInput.value.split(',').join()) / 1000);
-            if (isNaN(parseFloat(value.split(',').join('')))) {
-                value = '0.00';
-            }
-            _this.minCapInput.value = value
-        }, 300);
-    },
-    componentDidMount() {
-        var _this = this;
-        window.loadOffChainWallets().then(tokensList => _this.setState({ tokensList }));
-        this.onTierChange({
-            currentTarget: {
-                value: Object.keys(this.props.blockTiers)[0]
-            }
-        });
-    },
-    render() {
-        var _this = this;
-        if (!_this.props.stakingData) {
-            return (<LoaderMinimino />);
-        }
-        var rewardToken;
-        try {
-            rewardToken = this.rewardTokenPicker && this.rewardTokenPicker.state && !isNaN(this.rewardTokenPicker.state.selected) && this.state.tokensList[this.rewardTokenPicker.state.key][this.rewardTokenPicker.state.selected];
-        } catch (e) {
-        }
-        var mainToken;
-        try {
-            mainToken = this.mainTokenPicker && this.mainTokenPicker.state && !isNaN(this.mainTokenPicker.state.selected) && this.state.tokensList[this.mainTokenPicker.state.key][this.mainTokenPicker.state.selected];
-        } catch (e) {
-        }
-        return (<section>
-            <p className="WOWDescription2">Before creating a Liquidity Mining Mechanism, be sure there are already existing Uniswap V2 Liquidity pools for the DFO Voting Token. Be also assured that the DFO wallet has enough funds to cover the rewards. The min Stake is a critical feature to ensure that the maximum number of open positions are supported by the Ethereum Virtual Machine without receiving a general "Out Of Gas" error and makes it impossible for stakers to redeem their funds.</p>
-            <section className="TheDappInfo1">
-                <section className="DFOTitleSection BravPicciot">
-                    <h5 className="DFOHostingTitle"><b>Start Block:</b></h5>
-                    <input type="number" ref={ref => (this.startBlockInput = ref) && !_this.firstTime && (_this.firstTime = true) && (ref.value = '0')} min="0" />
-                    <h5 className="DFOHostingTitle"><b>End Block:</b></h5>
-                    <input type="number" ref={ref => (this.endBlockInput = ref) && !_this.firstTime && (_this.firstTime = true) && (ref.value = '0')} min="0" />
-                    <h5 className="DFOHostingTitle"><b>Reward With:</b></h5>
-                    <UniswapTokenPicker readOnly={this.state && this.state.tiers && this.state.tiers.length > 0} ref={ref => this.rewardTokenPicker = ref} tokensList={this.state.tokensList} exceptFor={window.wethAddress} onChange={() => _this.forceUpdate()} />
-                    <h5 className="DFOHostingTitle"><b>Main Token:</b></h5>
-                    <UniswapTokenPicker readOnly={this.state && this.state.tiers && this.state.tiers.length > 0} ref={ref => this.mainTokenPicker = ref} tokensList={this.state.tokensList} exceptFor={window.wethAddress} onChange={this.onNewMainToken} />
-                    <h5 className="DFOHostingTitle"><b>Pairs:</b></h5>
-                    {this.state.pairs.map((it, i) => <a key={it.address} href="javascript:;" className="DFOHostingTag">
-                        <img src={it.logo}></img>
-                        {it.symbol}
-                        {(!this.state || !this.state.tiers || this.state.tiers.length === 0) && <a className="ChiudiQuella ChiudiQuellaGigi" href="javascript:;" data-index={i} onClick={_this.deletePair}>X</a>}
-                    </a>)}
-                    {false && <TokenPicker ref={ref => this.pairPicker = ref} tokenAddress={this.props.element.token.options.address} onChange={this.onNewPair} />}
-                    <UniswapTokenPicker readOnly={this.state && this.state.tiers && this.state.tiers.length > 0} ref={ref => this.pairPicker = ref} tokensList={this.state.tokensList} onChange={this.onNewPair} />
-                </section>
-            </section>
-            <section className="TheDappInfo2">
-                <section className="DFOTitleSection BravPicciot">
-                    <h5 className="DFOHostingTitle"><b>Tiers:</b></h5>
-                    <section className="OVaglio">
-                        <p>Locking Period:</p>
-                        <select onChange={this.onTierChange}>
-                            {Object.keys(_this.props.blockTiers).map(it => <option key={it} value={it} selected={_this.state.tier === it}>{it}</option>)}
-                            <option value="Custom" selected={_this.state.tier === 'Custom'}>Custom</option>
-                        </select>
-
-                        {(!this.state || this.state.tier !== 'Custom') && <ul>
-                            <p>Blocks:</p>
-                            {_this.props.blockTiers[(this.state && this.state.tier) || Object.keys(_this.props.blockTiers)[0]].averages.map(it => <li key={it}>
-                                <label>
-                                    <input className="AMeMoPiach" type="radio" data-value={it} name="blockNumber" onChange={this.onBlockLimitChange} ref={ref => ref && (ref.checked = this.state.blockNumber === it)} />
-                                    <span><b>{it}</b></span>
-                                </label>
-                            </li>)}
-                        </ul>}
-
-                        {this.state && this.state.tier === 'Custom' && <section>
-                            <label>
-                                <p>Value:</p>
-                                <input type="number" min="1" placeholder="Custom block number..." ref={ref => this.customBlockNumber = ref} />
-                            </label>
-                            <label>
-                                <p>Tranches amount:</p>
-                                <input type="number" min="1" ref={ref => this.rewardSplitTranchesInput = ref} />
-                            </label>
-                        </section>}
-                        {(this.state && this.state.tier && this.state.tier !== 'Custom') && <p>{_this.props.blockTiers[this.state.tier].weeks} Tranches (Weeks)</p>}
-                    </section>
-                    <section className="OVaglio">
-                        <label>
-                            <p>Max Simultaneous Stake:</p>
-                            <input ref={ref => this.hardCapInput = ref} type="text" placeholder="Amount" spellcheck="false" autocomplete="off" autocorrect="off" inputmode="decimal" pattern="^[0-9][.,]?[0-9]$" onKeyUp={this.onHardCapChange} />
-                        </label>
-                        <label>
-                            <p>Min to Stake:</p>
-                            <input ref={ref => this.minCapInput = ref} type="text" placeholder="Amount" spellcheck="false" autocomplete="off" autocorrect="off" inputmode="decimal" pattern="^[0-9][.,]?[0-9]$" disabled />
-                        </label>
-                        <label>
-                            <p>Reward Percentage:</p>
-                            <aside><input ref={ref => this.rewardPercentageInput = ref} type="number" min="0" placeHoder="Insert a percentage" /> %</aside>
-                        </label>
-                    </section>
-                    <a href="javascript:;" className="LinkVisualButton LinkVisualPropose LinkVisualButtonG LinkVisualButtonBIGGA" onClick={this.addTier}>Add</a>
-                </section>
-            </section>
-            {this.state && this.state.tiers && <ul>
-                {this.state.tiers.map((it, i) => <li key={it.blockNumber} className="TheDappInfoAll TheDappInfoSub">
-                    <section className="TheDappInfo1">
-                        <section className="DFOTitleSection">
-                            <h5 className="DFOHostingTitle"><img src={rewardToken.logo}></img><b>{rewardToken.symbol}</b> for {it.time}</h5>
-                            <h5 className="DFOHostingTitle">Reward: <b className='DFOHostingTitleG'>{window.formatMoney(it.percentage)}%</b></h5>
-                            <h5 className="DFOHostingTitle">by staking <img src={mainToken.logo}></img><b>{mainToken.symbol}</b></h5>
-                            <p className="DFOHostingTitle">Distribution: <b>Weekly</b></p>
-                            <p className="DFOLabelTitleInfosmall">DEX: &#129412; V2 </p>
-                        </section>
-                    </section>
-                    {_this.state && _this.state.pairs && <section className="TheDappInfo1">
-                        <section className="DFOTitleSection">
-                            <h5 className="DFOHostingTitle"><b>Pairs:</b></h5>
-                            {_this.state.pairs.map(pair => <a key={pair.address} href={window.getNetworkElement('etherscanURL') + 'token/' + pair.address} target="_blank" className="DFOHostingTag">
-                                <img src={pair.logo} />
-                                {pair.symbol}
-                            </a>)}
-                        </section>
-                    </section>}
-                    <section className="TheDappInfo05">
-                        <section className="DFOTitleSection">
-                            <span className="DFOHostingTitleS">Min Cap:</span>
-                            <h5 className="DFOHostingTitle"><b>{window.fromDecimals(it.minCap, _this.props.element.decimals)}</b></h5>
-                            <span className="DFOHostingTitleS DFOHostingTitleG">Hard Cap:</span>
-                            <h5 className="DFOHostingTitle DFOHostingTitleG"><b>{window.fromDecimals(it.hardCap, _this.props.element.decimals)}</b></h5>
-                        </section>
-                    </section>
-                    <a className="ChiudiQuella ChiudiQuellaGigi" data-index={i} onClick={_this.deleteTier}>X</a>
-                </li>)}
-            </ul>}
-            <a href="javascript:;" className="LinkVisualButton LinkVisualPropose LinkVisualButtonB LinkVisualButtonBIGGAMaNNTROPAAAA" onClick={this.proposeNewStaking}>Propose New Liquidity Mining</a>
-        </section>);
+    const isWeth = (address) => {
+        return (address.toLowerCase() === props.dfoCore.getContextElement('wethTokenAddress').toLowerCase()) || (address === props.dfoCore.voidEthereumAddress);
     }
-});
+
+    const isValidAddress = (address) => {
+        // TODO update check
+        return address.length === 42;
+    }
+
+    const addFreeFarmingSetup = () => {
+        const setup = {
+            rewardPerBlock: freeRewardPerBlock,
+            data: freeLiquidityPoolToken,
+        }
+        if (isAdd && editIndex) {
+            props.removeFarmingSetup(editIndex);
+            setIsEdit(false);
+            setEditIndex(null);
+        }
+        props.addFarmingSetup(setup);
+        setFreeLiquidityPoolToken(null);
+        setFreeRewardPerBlock(0);
+        setSelectedFarmingType(null);
+        setIsAdd(false);
+    }
+
+    const addLockedFarmingSetup = () => {
+        const setup = {
+            period: lockedPeriod,
+            startBlock: lockedStartBlock,
+            endBlock: lockedStartBlock + lockedPeriod,
+            data: lockedMainToken,
+            maxLiquidity: lockedMaxLiquidity,
+            rewardPerBlock: lockedRewardPerBlock,
+            penaltyFee: lockedPenaltyFee,
+            renewTimes: lockedRenewTimes,
+            secondaryToken: lockedSecondaryToken,
+        }
+        if (isAdd && editIndex) {
+            props.removeFarmingSetup(editIndex);
+            setIsEdit(false);
+            setEditIndex(null);
+        }
+        props.addFarmingSetup(setup);
+        setLockedPeriod(null);
+        setLockedStartBlock(0);
+        setLockedMainToken(null);
+        setLockedMaxLiquidity(0);
+        setLockedRewardPerBlock(0);
+        setLockedHasPenaltyFee(false);
+        setLockedPenaltyFee(0);
+        setLockedIsRenewable(false);
+        setLockedRenewTimes(0);
+        setLockedSecondaryToken(null);
+        setSelectedFarmingType(null);
+        setIsAdd(false);
+        props.setFarmingContractStep(0);
+    }
+
+    const editSetup = (setup, index) => {
+        if (!setup.endBlock) {
+            // free setup
+            setFreeLiquidityPoolToken(setup.data);
+            setFreeRewardPerBlock(setup.rewardPerBlock);
+            setSelectedFarmingType('free');
+        } else {
+            // locked setup
+            setLockedPeriod(setup.period);
+            setLockedStartBlock(setup.startBlock);
+            setLockedMainToken(setup.data);
+            setLockedMaxLiquidity(setup.maxLiquidity);
+            setLockedRewardPerBlock(setup.rewardPerBlock);
+            setLockedHasPenaltyFee(parseInt(setup.penaltyFee) !== 0);
+            setLockedPenaltyFee(setup.penaltyFee);
+            setLockedIsRenewable(parseInt(setup.renewTimes) !== 0);
+            setLockedRenewTimes(setup.renewTimes);
+            setLockedSecondaryToken(setup.secondaryToken);
+            setSelectedFarmingType('locked');
+        }
+        setIsAdd(true);
+        setIsEdit(true);
+        setEditIndex(index);
+    }
+
+    const onUpdatePenaltyFee = (value) => {
+        setLockedPenaltyFee(value > 100 ? 100 : value);
+    }
+
+    const onSelectRewardToken = async (address) => {
+        setLoading(true);
+        const rewardToken = await props.dfoCore.getContract(props.dfoCore.getContextElement('ERC20ABI'), address);
+        console.log(rewardToken);
+        const symbol = await rewardToken.methods.symbol().call();
+        setSelectedRewardToken({ symbol, address });
+        setLoading(false);
+    }
+
+    const initializeDeployData = async () => {
+        setDeployLoading(true);
+        try {
+            const host = selectedHost === 'wallet' ? hostWalletAddress : hostDeployedContract;
+            const hasExtension = (selectedHost === "deployed-contract" && hostDeployedContract && !deployContract);
+            const data = { setups: [], rewardTokenAddress: selectedRewardToken.address, byMint, hasLoadBalancer, pinnedSetupIndex, deployContract, host, hasExtension, extensionInitData: extensionPayload || '' };
+            const ammAggregator = await props.dfoCore.getContract(props.dfoCore.getContextElement('AMMAggregatorABI'), props.dfoCore.getContextElement('ammAggregatorAddress'));
+            for (let i = 0; i < props.farmingSetups.length; i++) {
+                const setup = props.farmingSetups[i];
+                const isFree = !setup.endBlock;
+                const result = await ammAggregator.methods.findByLiquidityPool(isFree ? setup.data.address : setup.secondaryToken).call();
+                const { amm } = result;
+                const ammContract = await props.dfoCore.getContract(props.dfoCore.getContextElement('AMMABI'), amm);
+                const res = await ammContract.methods.byLiquidityPool(isFree ? setup.data.address : setup.secondaryToken).call();
+                const involvingETH = res['2'].filter((address) => isWeth(address)).length > 0;
+                data.setups.push(
+                    [
+                        amm,//uniswapAMM.options.address,
+                        0,
+                        isFree ? setup.data.address : setup.secondaryToken,
+                        isFree ? props.dfoCore.voidEthereumAddress : setup.data.address,
+                        isFree ? 0 : setup.startBlock,
+                        isFree ? 0 : (parseInt(setup.startBlock) + parseInt(setup.period)),
+                        props.dfoCore.fromDecimals(setup.rewardPerBlock),
+                        isFree ? props.dfoCore.fromDecimals(setup.rewardPerBlock) : 0,
+                        0,
+                        0,
+                        isFree ? 0 : props.dfoCore.fromDecimals(setup.maxLiquidity),
+                        0,
+                        isFree,
+                        isFree ? 0 : setup.renewTimes,
+                        isFree ? 0 : props.dfoCore.fromDecimals(setup.penaltyFee / 100),
+                        involvingETH
+                    ]
+                )
+            }
+            console.log(data);
+            setDeployData(data);
+        } catch (error) {
+            console.error(error);
+            setDeployData(null);
+        } finally {
+            setDeployLoading(false);
+        }
+    }
+
+    const deploy = async () => {
+        let error = false;
+        let deployTransaction = null;
+        setDeployLoading(true);
+        try {
+            const { setups, rewardTokenAddress, hasLoadBalancer, pinnedSetupIndex, extensionAddress, extensionInitData } = deployData;
+            const factoryAddress = props.dfoCore.getContextElement("liquidityMiningFactoryAddress");
+            const liquidityMiningFactory = await props.dfoCore.getContract(props.dfoCore.getContextElement("LiquidityMiningFactoryABI"), factoryAddress);
+            const types = ["address", "bytes", "address", "address", "bytes", "bool", "uint256"];
+            const encodedSetups = abi.encode(["tuple(address,uint256,address,address,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,bool,uint256,uint256,bool)[]"], [setups]);
+            const params = [extensionAddress ? extensionAddress : hostDeployedContract, extensionInitData || extensionPayload || "0x", props.dfoCore.getContextElement("ethItemOrchestratorAddress"), rewardTokenAddress, encodedSetups, hasLoadBalancer, pinnedSetupIndex || 0];
+            console.log(params)
+            console.log(extensionInitData);
+            const payload = props.dfoCore.web3.utils.sha3(`init(${types.join(',')})`).substring(0, 10) + (props.dfoCore.web3.eth.abi.encodeParameters(types, params).substring(2));
+            console.log(payload);
+            const gasLimit = await liquidityMiningFactory.methods.deploy(payload).estimateGas({ from: props.dfoCore.address });
+            deployTransaction = await liquidityMiningFactory.methods.deploy(payload).send({ from: props.dfoCore.address, gasLimit });
+            console.log(deployTransaction);
+        } catch (error) {
+            console.error(error);
+            error = true;
+        } finally {
+            if (!error && deployTransaction) {
+                props.updateFarmingContract(null);
+                await Promise.all(props.farmingSetups.map(async (_, i) => {
+                    props.removeFarmingSetup(i);
+                }));
+                props.setFarmingContractStep(0);
+                setSelectedRewardToken(null);
+                setByMint(false);
+                setIsDeploy(false);
+                setIsAddLoadBalancer(false);
+            }
+            setDeployLoading(false);
+        }
+    }
+
+    const deployExtension = async () => {
+        let error = false;
+        setDeployLoading(true);
+        try {
+            const { byMint, host, deployContract } = deployData;
+            if (!deployContract) {
+                const factoryAddress = props.dfoCore.getContextElement("liquidityMiningFactoryAddress");
+                const liquidityMiningFactory = await props.dfoCore.getContract(props.dfoCore.getContextElement("LiquidityMiningFactoryABI"), factoryAddress);
+                const cloneGasLimit = await liquidityMiningFactory.methods.cloneLiquidityMiningDefaultExtension().estimateGas({ from: props.dfoCore.address });
+                const cloneExtensionTransaction = await liquidityMiningFactory.methods.cloneLiquidityMiningDefaultExtension().send({ from: props.dfoCore.address, gasLimit: cloneGasLimit });
+                const cloneExtensionReceipt = await props.dfoCore.web3.eth.getTransactionReceipt(cloneExtensionTransaction.transactionHash);
+                const extensionAddress = props.dfoCore.web3.eth.abi.decodeParameter("address", cloneExtensionReceipt.logs.filter(it => it.topics[0] === props.dfoCore.web3.utils.sha3('ExtensionCloned(address)'))[0].topics[1])
+                const liquidityMiningExtension = new props.dfoCore.web3.eth.Contract(props.dfoCore.getContextElement("LiquidityMiningExtensionABI"), extensionAddress);
+                const extensionInitData = liquidityMiningExtension.methods.init(byMint, host).encodeABI()
+                setDeployData({ ...deployData, extensionAddress, extensionInitData });
+            } else {
+                const { contract, payload } = deployContract;
+                const { abi, bytecode } = contract;
+                const gasLimit = await new props.dfoCore.web3.eth.Contract(abi).deploy({ data: bytecode }).estimateGas({ from: props.dfoCore.address });
+                const extension = await new props.dfoCore.web3.eth.Contract(abi).deploy({ data: bytecode }).send({ from: props.dfoCore.address, gasLimit });
+                console.log(extension.options.address);
+                setDeployData({ ...deployData, extensionAddress: extension.options.address, extensionInitData: payload });
+            }
+        } catch (error) {
+            console.error(error);
+            error = false;
+        } finally {
+            setDeployLoading(false);
+            setDeployStep(!error ? deployStep + 1 : deployStep);
+        }
+    }
+
+    const getCreationComponent = () => {
+        return <div className="col-12">
+            {
+                deployStep === 3 && <div className="row justify-content-center mb-4">
+                    <div className="col-12">
+                        <h3 className="text-secondary"><b>Deploy successful!</b></h3>
+                    </div>
+                </div>
+            }
+            <div className="row justify-content-center mb-4">
+                <div className="col-9">
+                    <TokenInput placeholder={"Reward token"} onClick={(address) => onSelectRewardToken(address)} text={"Load"} />
+                </div>
+            </div>
+            {
+                loading ? <div className="row justify-content-center">
+                    <div className="spinner-border text-secondary" role="status">
+                        <span className="visually-hidden"></span>
+                    </div>
+                </div> : <React.Fragment>
+                        <div className="row mb-4">
+                            {selectedRewardToken && <div className="col-12">
+                                <Coin address={selectedRewardToken.address} /> {selectedRewardToken.symbol}
+                            </div>
+                            }
+                        </div>
+                        {
+                            selectedRewardToken && <div className="col-12">
+                                <p style={{ fontSize: 14 }}>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Quaerat animi ipsam nemo at nobis odit temporibus autem possimus quae vel, ratione numquam modi rem accusamus, veniam neque voluptates necessitatibus enim!</p>
+                            </div>
+                        }
+                        {
+                            selectedRewardToken && <div className="form-check my-4">
+                                <input className="form-check-input" type="checkbox" value={byMint} onChange={(e) => setByMint(e.target.checked)} id="setByMint" />
+                                <label className="form-check-label" htmlFor="setByMint">
+                                    By mint
+                    </label>
+                            </div>
+                        }
+                        {
+                            selectedRewardToken && <div className="col-12">
+                                <button className="btn btn-secondary" onClick={() => {
+                                    props.updateFarmingContract({ rewardToken: { ...selectedRewardToken, byMint } });
+                                    setDeployStep(0);
+                                }}>Start</button>
+                            </div>
+                        }
+                    </React.Fragment>
+            }
+
+        </div>
+    }
+
+    const getFarmingSetups = () => {
+        return <div className="col-12 p-0">
+            {
+                props.farmingSetups.map((setup, i) => {
+                    return (
+                        <div key={i} className="row align-items-center text-left mb-md-2 mb-4">
+                            <div className="col-md-9 col-12">
+                                <b style={{ fontSize: 14 }}>{!setup.startBlock ? "Free setup" : "Locked setup"} {setup.data.name}{setup.startBlock ? `${setup.data.symbol}` : ` | ${setup.data.tokens.map((token) => `${token.symbol}`)}`} - Reward: {setup.rewardPerBlock} {props.farmingContract.rewardToken.symbol}/block</b>
+                            </div>
+                            <div className="col-md-3 col-12 flex">
+                                <button className="btn btn-sm btn-outline-danger mr-1" onClick={() => props.removeFarmingSetup(i)}><b>X</b></button> <button onClick={() => editSetup(setup, i)} className="btn btn-sm btn-danger ml-1"><b>EDIT</b></button>
+                            </div>
+                        </div>
+                    )
+                })
+            }
+            <div className="row justify-content-between mt-4">
+                <div className="col-12 flex justify-content-start mb-4">
+                    <button onClick={() => setIsAdd(true)} className="btn btn-light">Add setup</button>
+                </div>
+                <div className="col-12 mt-4">
+                    <button onClick={() => {
+                        setSelectedRewardToken(null);
+                        props.farmingSetups.forEach((_, index) => props.removeFarmingSetup(index));
+                        props.updateFarmingContract(null);
+                    }} className="btn btn-light mr-4">Cancel</button> <button onClick={() => setIsAddLoadBalancer(true)} className="btn btn-secondary ml-4">Next</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    const getEmptyFarmingSetups = () => {
+        if (props.creationStep === 0) {
+            return (
+                <div className="col-12">
+                    <div className="row justify-content-center mb-4">
+                        <h6><b>Select farming type</b></h6>
+                    </div>
+                    <div className="row justify-content-center mb-4">
+                        <button onClick={() => setSelectedFarmingType(selectedFarmingType !== 'free' ? 'free' : null)} className={`btn ${selectedFarmingType === 'free' ? "btn-secondary" : "btn-outline-secondary"} mr-4`}>Free Farming</button>
+                        <button onClick={() => setSelectedFarmingType(selectedFarmingType !== 'locked' ? 'locked' : null)} className={`btn ${selectedFarmingType === 'locked' ? "btn-secondary" : "btn-outline-secondary"}`}>Locked</button>
+                    </div>
+                    <div className="row mb-4">
+                        <p style={{ fontSize: 14 }}>Lorem, ipsum dolor sit amet consectetur adipisicing elit. Quaerat animi ipsam nemo at nobis odit temporibus autem possimus quae vel, ratione numquam modi rem accusamus, veniam neque voluptates necessitatibus enim!</p>
+                    </div>
+                    <div className="row justify-content-center">
+                        <button onClick={() => props.setFarmingContractStep(1)} disabled={!selectedFarmingType} className="btn btn-primary">Next</button>
+                    </div>
+                </div>
+            );
+        } else if (props.creationStep === 1) {
+            if (!selectedFarmingType) {
+                props.setFarmingContractStep(0);
+                return <div />;
+            }
+            return selectedFarmingType === 'free' ? getFreeFirstStep() : getLockedFirstStep();
+        } else if (props.creationStep === 2) {
+            return getLockedSecondStep();
+        }
+        return <div />
+    }
+
+    const onSelectFreeLiquidityPoolToken = async (address) => {
+        if (!address) return;
+        try {
+            setLoading(true);
+            const ammAggregator = await props.dfoCore.getContract(props.dfoCore.getContextElement('AMMAggregatorABI'), props.dfoCore.getContextElement('ammAggregatorAddress'));
+            const res = await ammAggregator.methods.info(address).call();
+            const name = res['name'];
+            const ammAddress = res['amm'];
+            const ammContract = await props.dfoCore.getContract(props.dfoCore.getContextElement('AMMABI'), ammAddress);
+            const lpInfo = await ammContract.methods.byLiquidityPool(address).call();
+            console.log(lpInfo);
+            const tokens = [];
+            await Promise.all(lpInfo[2].map(async (tkAddress) => {
+                if (isWeth(tkAddress)) {
+                    tokens.push({
+                        symbol: 'ETH',
+                        address: props.dfoCore.getContextElement('wethTokenAddress'),
+                    })
+                } else {
+                    const currentToken = await props.dfoCore.getContract(props.dfoCore.getContextElement('ERC20ABI'), tkAddress);
+                    const symbol = await currentToken.methods.symbol().call();
+                    tokens.push({
+                        symbol,
+                        address: tkAddress
+                    })
+                }
+
+            }))
+            setFreeLiquidityPoolToken({
+                address,
+                name,
+                tokens,
+            });
+        } catch (error) {
+            setFreeLiquidityPoolToken(null);
+            console.error(error);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const onSelectMainToken = async (address) => {
+        if (!address) address = "0x7b123f53421b1bF8533339BFBdc7C98aA94163db";
+        setLoading(true);
+        const mainTokenContract = await props.dfoCore.getContract(props.dfoCore.getContextElement('ERC20ABI'), address);
+        const symbol = await mainTokenContract.methods.symbol().call();
+        setLockedMainToken({ symbol, address });
+        setLoading(false);
+    }
+
+    const goToFirstStep = () => {
+        setFreeLiquidityPoolToken(null);
+        setFreeRewardPerBlock(0);
+        setLockedPeriod(null);
+        setLockedStartBlock(0);
+        setLockedMainToken(null);
+        setLockedMaxLiquidity(0);
+        setLockedRewardPerBlock(0);
+        setLockedHasPenaltyFee(false);
+        setLockedPenaltyFee(0);
+        setLockedIsRenewable(false);
+        setLockedRenewTimes(0);
+        setLockedSecondaryToken(null);
+        props.setFarmingContractStep(0);
+    }
+
+    const getFreeFirstStep = () => {
+        return <div className="col-12">
+            <div className="row justify-content-center mb-4">
+                <div className="col-9">
+                    <TokenInput label={"Liquidity pool address"} placeholder={"Liquidity pool address"} width={60} onClick={(address) => onSelectFreeLiquidityPoolToken(address)} text={"Load"} />
+                </div>
+            </div>
+            {
+                loading ? <div className="row justify-content-center">
+                    <div className="spinner-border text-secondary" role="status">
+                        <span className="visually-hidden"></span>
+                    </div>
+                </div> : <React.Fragment>
+                        <div className="row mb-4">
+                            {(freeLiquidityPoolToken && freeLiquidityPoolToken.tokens.length > 0) && <div className="col-12">
+                                <b>{freeLiquidityPoolToken.name} | {freeLiquidityPoolToken.tokens.map((token) => <React.Fragment>{token.symbol} </React.Fragment>)}</b> {freeLiquidityPoolToken.tokens.map((token) => <Coin address={token.address} className="mr-2" />)}
+                            </div>
+                            }
+                        </div>
+                        {
+                            freeLiquidityPoolToken && <React.Fragment>
+                                <div className="row justify-content-center mb-4">
+                                    <div className="col-6">
+                                        <Input min={0} showCoin={true} address={selectedRewardToken.address} value={freeRewardPerBlock} name={selectedRewardToken.symbol} label={"Reward per block"} onChange={(e) => setFreeRewardPerBlock(e.target.value)} />
+                                    </div>
+                                </div>
+                                <div className="row justify-content-center align-items-center flex-column mb-2">
+                                    <p className="text-center"><b>Monthly*: {freeRewardPerBlock * 3000} {selectedRewardToken.symbol}</b></p>
+                                    <p className="text-center"><b>Yearly*: {freeRewardPerBlock * 36000} {selectedRewardToken.symbol}</b></p>
+                                </div>
+                                <div className="row mb-4">
+                                    <p className="text-center">*Monthly/yearly reward are calculated in a forecast based on 3000 Blocks/m and 36000/y.</p>
+                                </div>
+                            </React.Fragment>
+                        }
+                        <div className="row justify-content-center mb-4">
+                            <button onClick={() => goToFirstStep()} className="btn btn-light mr-4">Cancel</button>
+                            <button onClick={() => addFreeFarmingSetup()} disabled={!freeLiquidityPoolToken || freeRewardPerBlock <= 0} className="btn btn-secondary ml-4">{isEdit ? 'Edit' : 'Add'}</button>
+                        </div>
+                    </React.Fragment>
+            }
+        </div>
+    }
+
+    const getLockedFirstStep = () => {
+        return <div className="col-12">
+            <div className="row mb-4">
+                <div className="col-12">
+                    <select className="custom-select wusd-pair-select" value={lockedPeriod} onChange={(e) => setLockedPeriod(e.target.value)}>
+                        <option value={0}>Choose locked period</option>
+                        {
+                            Object.keys(props.dfoCore.getContextElement("blockIntervals")).map((key, index) => {
+                                return <option key={index} value={props.dfoCore.getContextElement("blockIntervals")[key]}>{key}</option>
+                            })
+                        }
+                    </select>
+                </div>
+            </div>
+            <div className="row mb-4">
+                <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+            </div>
+            <div className="row justify-content-center mb-4">
+                <div className="col-6">
+                    <Input label={"Start block"} min={currentBlockNumber} value={lockedStartBlock || currentBlockNumber} onChange={(e) => setLockedStartBlock(parseInt(e.target.value))} />
+                </div>
+            </div>
+            <div className="row mb-4">
+                <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+            </div>
+            <div className="row justify-content-center mb-4">
+                <div className="col-9">
+                    <TokenInput label={"Main token"} placeholder={"Main token address"} width={60} onClick={(address) => onSelectMainToken(address)} text={"Load"} />
+                </div>
+            </div>
+            {
+                loading ? <div className="row justify-content-center">
+                    <div className="spinner-border text-secondary" role="status">
+                        <span className="visually-hidden"></span>
+                    </div>
+                </div> : <React.Fragment>
+                        <div className="row mb-4">
+                            {lockedMainToken && <div className="col-12">
+                                <b>{lockedMainToken.symbol}</b> <Coin address={lockedMainToken.address} className="ml-2" />
+                            </div>
+                            }
+                        </div>
+                        {
+                            lockedMainToken && <React.Fragment>
+                                <hr />
+                                <div className="row justify-content-center my-4">
+                                    <div className="col-9">
+                                        <TokenInput label={"Liquidity pool token"} placeholder={"Liquidity pool token address"} width={60} onClick={(address) => setLockedSecondaryToken(address !== lockedMainToken.address ? address : lockedSecondaryToken)} text={"Load"} />
+                                    </div>
+                                </div>
+                                {
+                                    lockedSecondaryToken && <div key={lockedSecondaryToken} className="row align-items-center mb-2">
+                                        <div className="col-md-9 col-12">{lockedSecondaryToken}</div>
+                                        <div className="col-md-3 col-12">
+                                            <button className="btn btn-outline-danger btn-sm" onClick={() => setLockedSecondaryToken(null)}>Remove</button>
+                                        </div>
+                                    </div>
+                                }
+                                <div className="row justify-content-center mt-4 mb-4">
+                                    <div className="col-6">
+                                        <Input label={"Max stakeable"} min={0} showCoin={true} address={lockedMainToken.address} value={lockedMaxLiquidity} name={lockedMainToken.symbol} onChange={(e) => setLockedMaxLiquidity(e.target.value)} />
+                                    </div>
+                                </div>
+                                <div className="row mb-4">
+                                    <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                                </div>
+                                <div className="row justify-content-center mb-4">
+                                    <div className="col-6">
+                                        <Input label={"Reward per block"} min={0} showCoin={true} address={lockedMainToken.address} value={lockedRewardPerBlock} name={lockedMainToken.symbol} onChange={(e) => setLockedRewardPerBlock(e.target.value)} />
+                                    </div>
+                                </div>
+                                <div className="row mb-4">
+                                    <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                                </div>
+                                <div className="row justify-content-center align-items-center flex-column mb-2">
+                                    <p className="text-center"><b>Reward/block per {lockedMainToken.symbol}: {!lockedMaxLiquidity ? 0 : parseFloat((lockedRewardPerBlock * (1 / lockedMaxLiquidity)).toPrecision(4))} {lockedMainToken.symbol}</b></p>
+                                </div>
+                            </React.Fragment>
+                        }
+                        <div className="row justify-content-center mb-4">
+                            <button onClick={() => goToFirstStep()} className="btn btn-light mr-4">Cancel</button>
+                            <button onClick={() => props.setFarmingContractStep(2)} disabled={!lockedMainToken || lockedRewardPerBlock <= 0 || !lockedMaxLiquidity || !lockedSecondaryToken || !lockedStartBlock || !lockedPeriod} className="btn btn-secondary ml-4">Next</button>
+                        </div>
+                    </React.Fragment>
+            }
+        </div>
+    }
+
+    const getLockedSecondStep = () => {
+        return (
+            <div className="col-12">
+                <div className="row justify-content-center">
+                    <div className="form-check my-4">
+                        <input className="form-check-input" type="checkbox" value={lockedHasPenaltyFee} onChange={(e) => setLockedHasPenaltyFee(e.target.checked)} id="penaltyFee" />
+                        <label className="form-check-label" htmlFor="penaltyFee">
+                            Penalty fee
+                    </label>
+                    </div>
+                </div>
+                {
+                    lockedHasPenaltyFee && <div className="row mb-4 justify-content-center">
+                        <div className="col-md-6 col-12 flex justify-content-center">
+                            <input type="number" className="form-control w-50" step={0.001} max={100} min={0} value={lockedPenaltyFee} onChange={(e) => onUpdatePenaltyFee(e.target.value)} />
+                        </div>
+                    </div>
+                }
+                <div className="row mb-4">
+                    <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                </div>
+                <div className="row justify-content-center">
+                    <div className="form-check my-4">
+                        <input className="form-check-input" type="checkbox" value={lockedIsRenewable} onChange={(e) => setLockedIsRenewable(e.target.checked)} id="repeat" />
+                        <label className="form-check-label" htmlFor="repeat">
+                            Repeat
+                    </label>
+                    </div>
+                </div>
+                {
+                    lockedIsRenewable && <div className="row mb-4 justify-content-center">
+                        <div className="col-md-6 col-12">
+                            <Input min={0} width={50} address={lockedMainToken.address} value={lockedRenewTimes} onChange={(e) => setLockedRenewTimes(e.target.value)} />
+                        </div>
+                    </div>
+                }
+                <div className="row mb-4">
+                    <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                </div>
+                <div className="row justify-content-center mb-4">
+                    <button onClick={() => goToFirstStep()} className="btn btn-light mr-4">Cancel</button>
+                    <button onClick={() => addLockedFarmingSetup()} disabled={(lockedIsRenewable && lockedRenewTimes === 0) || (lockedHasPenaltyFee && lockedPenaltyFee === 0)} className="btn btn-secondary ml-4">Next</button>
+                </div>
+            </div>
+        )
+    }
+
+    const getLockedThirdStep = () => {
+        return (
+            <div className="col-12">
+                <div className="row justify-content-center">
+                    <div className="form-check my-4">
+                        <input className="form-check-input" type="checkbox" value={hasLoadBalancer} onChange={(e) => setHasLoadBalancer(e.target.checked)} id="penaltyFee" />
+                        <label className="form-check-label" htmlFor="penaltyFee">
+                            Load balancer
+                    </label>
+                    </div>
+                </div>
+                {
+                    hasLoadBalancer && <div className="row mb-4 justify-content-center">
+                        <div className="col-md-9 col-12">
+                            <select className="custom-select wusd-pair-select" value={pinnedSetupIndex} onChange={(e) => setPinnedSetupIndex(e.target.value)}>
+                                <option value={null}>Choose setup..</option>
+                                {
+                                    props.farmingSetups.map((setup, index) => {
+                                        console.log(setup.data);
+                                        return <option key={index} value={index} disabled={setup.startBlock}>
+                                            {!setup.startBlock ? "Free setup" : "Locked setup"} {setup.data.name}{setup.startBlock ? `${setup.data.symbol}` : ` | ${setup.data.tokens.map((token) => `${token.symbol}`)}`} - Reward: {setup.rewardPerBlock} {props.farmingContract.rewardToken.symbol}/block
+                                    </option>;
+                                    })
+                                }
+                            </select>
+                        </div>
+                    </div>
+                }
+                <div className="row mb-4">
+                    <p className="text-center text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                </div>
+                <div className="row justify-content-center mb-4">
+                    <button onClick={() => {
+                        setHasLoadBalancer(false);
+                        setPinnedSetupIndex(null);
+                        setIsAddLoadBalancer(false);
+                    }} className="btn btn-light mr-4">Cancel</button>
+                    <button onClick={() => {
+                        setIsAddLoadBalancer(false);
+                        setIsDeploy(true);
+                    }} className="btn btn-secondary ml-4">Next</button>
+                </div>
+            </div>
+        )
+    }
+
+    const getLockedFourthStep = () => {
+
+        if (deployLoading) {
+            return <div className="col-12">
+                <div className="row justify-content-center">
+                    <div className="spinner-border text-secondary" role="status">
+                        <span className="visually-hidden"></span>
+                    </div>
+                </div>
+            </div>
+        }
+
+        if (deployStep === 1) {
+            return <div className="col-12 flex flex-column justify-content-center align-items-center">
+                <div className="row mb-4">
+                    <h6><b>Deploy extension</b></h6>
+                </div>
+                <div className="row">
+                    <button onClick={() => deployExtension()} className="btn btn-secondary">Deploy extension</button>
+                </div>
+            </div>
+        } else if (deployStep === 2) {
+            return <div className="col-12 flex flex-column justify-content-center align-items-center">
+                <div className="row mb-4">
+                    <h6><b>Deploy Farming Cotnract</b></h6>
+                </div>
+                <div className="row">
+                    <button onClick={() => deploy()} className="btn btn-secondary">Deploy contract</button>
+                </div>
+            </div>
+        }
+
+        return (
+            <div className="col-12">
+                <div className="row">
+                    <h6><b>Host</b></h6>
+                </div>
+                <div className="row mb-2">
+                    <p className="text-left text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                </div>
+                <div className="row mb-4">
+                    <div className="col-12 p-0">
+                        <select className="custom-select wusd-pair-select" value={selectedHost} onChange={(e) => setSelectedHost(e.target.value)}>
+                            <option value="">Choose an host..</option>
+                            <option value="deployed-contract">Contract</option>
+                            <option value="wallet">Wallet</option>
+                        </select>
+                    </div>
+                </div>
+                {
+                    selectedHost === 'wallet' ? <React.Fragment>
+                        <div className="row mb-2">
+                            <input type="text" className="form-control" value={hostWalletAddress} onChange={(e) => setHostWalletAddress(e.target.value.toString())} placeholder={"Wallet address"} aria-label={"Wallet address"} />
+                        </div>
+                        <div className="row mb-4">
+                            <p className="text-left text-small">Lorem, ipsum dolor sit amet consectetur adipisicing elit. Omnis delectus incidunt laudantium distinctio velit reprehenderit quaerat, deserunt sint fugit ex consectetur voluptas suscipit numquam. Officiis maiores quaerat quod necessitatibus perspiciatis!</p>
+                        </div>
+                    </React.Fragment> : selectedHost === 'deployed-contract' ? <React.Fragment>
+                        <div className="form-check my-4">
+                            <input className="form-check-input" type="checkbox" value={useDeployedContract} onChange={(e) => setUseDeployedContract(e.target.checked)} id="setIsDeploy" />
+                            <label className="form-check-label" htmlFor="setIsDeploy">
+                                Use deployed contract
+                        </label>
+                        </div>
+                        {
+                            !useDeployedContract ? <ContractEditor dfoCore={props.dfoCore} onFinish={(contract, payload) => setDeployContract({ contract, payload })} /> : <React.Fragment>
+                                <div className="row mb-2">
+                                    <input type="text" className="form-control" value={hostDeployedContract} onChange={(e) => setHostDeployedContract(e.target.value.toString())} placeholder={"Deployed contract address"} aria-label={"Deployed contract address"} />
+                                </div>
+                            </React.Fragment>
+                        }
+                    </React.Fragment> : <div />
+                }
+                <div>
+                    <input type="text" className="form-control" value={extensionPayload || ""} onChange={(e) => setExtensionPayload(e.target.value.toString())} placeholder={"Payload"} aria-label={"Payload"} />
+                </div>
+                <div className="row justify-content-center my-4">
+                    <button onClick={() => {
+                        setSelectedHost(null);
+                        setIsAddLoadBalancer(true);
+                        setIsDeploy(false);
+                    }} className="btn btn-light mr-4">Cancel</button>
+                    <button onClick={() => {
+                        initializeDeployData();
+                        setDeployStep((selectedHost === 'deployed-contract' && hostDeployedContract && !deployContract) ? 2 : 1);
+                    }} className="btn btn-secondary ml-4" disabled={!selectedHost || (selectedHost === 'wallet' && (!hostWalletAddress || !isValidAddress(hostWalletAddress))) || (selectedHost === 'deployed-contract' && ((!useDeployedContract && (!deployContract || !deployContract.contract)) || (useDeployedContract && !hostDeployedContract)))}>Deploy</button>
+                </div>
+            </div>
+        )
+    }
+
+    const getFarmingContractStatus = () => {
+        return (
+            <div className="col-12">
+                <div className="row flex-column align-items-start mb-4">
+                    <h5 className="text-secondary"><b>Farm {props.farmingContract.rewardToken.symbol}</b></h5>
+                    <b>{isAddLoadBalancer || isDeploy ? "Advanced setup" : "Setups list"}</b>
+                </div>
+                {
+                    isAddLoadBalancer ? getLockedThirdStep() : isDeploy ? getLockedFourthStep() : <div className="col-12">
+                        {
+                            (props.farmingSetups.length > 0 && !isAdd) && getFarmingSetups()
+                        }
+                        {
+                            (props.farmingSetups.length === 0 || isAdd) && getEmptyFarmingSetups()
+                        }
+                    </div>
+                }
+            </div>
+        )
+    }
+
+    return (
+        <div className="create-component">
+            <div className="row mb-4">
+                {!props.farmingContract && getCreationComponent()}
+                {props.farmingContract && getFarmingContractStatus()}
+            </div>
+        </div>
+    );
+}
+
+/*var StakingEdit = React.createClass({
+    requiredModules : [
+        'spa/farming/staking/Input.jsx',
+        'spa/farming/staking/Coin.jsx',
+        'spa/farming/staking/TokenInput.jsx'
+    ],
+    render() {
+        return renderStakingEdit(this.props);
+    }
+});*/

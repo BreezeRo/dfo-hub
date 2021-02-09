@@ -264,13 +264,13 @@ var ReactModuleManager = function() {
     }
     return {
         createElement: function(viewName) {
-            return createElementInternal({
+            return viewName === React.Fragment ? React.createElement2.apply(React, arguments) : createElementInternal({
                 viewName,
                 arguments: arguments
             })
         },
         createElementNew: function(viewName) {
-            return createElementInternal({
+            return viewName === React.Fragment ? React.createElement2.apply(React, arguments) : createElementInternal({
                 viewName,
                 createNew: true,
                 arguments: arguments
@@ -284,6 +284,8 @@ React.defaultLoader = function() {
 React.defaultCatcher = function(e) {
     return React.createElement('h1', {}, 'An error occurred during rendering: "' + (e.message || e) + '".\nPlease try refresh the page.');
 };
+window.useState = React.useState;
+window.useEffect = React.useEffect;
 React.createElement2 = React.createElement;
 React.createElement = ReactModuleManager.createElement
 createReactClass && (React.createClass = createReactClass)

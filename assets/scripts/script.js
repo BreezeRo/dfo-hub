@@ -164,6 +164,9 @@ window.onEthereumUpdate = function onEthereumUpdate(millis) {
                 window.uniswapV2Factory = window.newContract(window.context.uniSwapV2FactoryAbi, window.context.uniSwapV2FactoryAddress);
                 window.uniswapV2Router = window.newContract(window.context.uniSwapV2RouterAbi, window.context.uniSwapV2RouterAddress);
                 window.wethAddress = window.web3.utils.toChecksumAddress(await window.blockchainCall(window.uniswapV2Router.methods.WETH));
+                window.liquidityMiningFactory = window.newContract(window.context.LiquidityMiningFactoryABI, window.getNetworkElement("liquidityMiningFactoryAddress"));
+                window.dfoBasedLiquidityMiningExtensionFactory = window.newContract(window.context.DFOBasedLiquidityMiningExtensionFactoryABI, window.getNetworkElement("DFOBasedLiquidityMiningExtensionFactory"));
+                window.ammAggregator = window.newContract(window.context.AMMAggregatorABI, window.getNetworkElement("ammAggregatorAddress"));
                 window.list = {
                     DFO: {
                         key: 'DFO',
@@ -1759,14 +1762,20 @@ window.loadStakingData = async function loadStakingData(element, only) {
     var promises = [];
     for (var i in json) {
         var elem = json[i];
-        if (elem.name.indexOf('staking.transfer.authorized.') === -1 && elem.name.indexOf('authorizedtotransferforstaking_') === -1) {
+        if (elem.name.indexOf('liquiditymining.authorized.') === -1 && elem.name.indexOf('staking.transfer.authorized.') === -1 && elem.name.indexOf('authorizedtotransferforstaking_') === -1) {
             continue;
         }
         var active = await window.blockchainCall(element.stateHolder.methods.getBool, elem.name);
         var split = elem.name.split('.');
         split.length === 1 && (split = elem.name.split('_'));
-        var stakingManager = window.newContract(window.context.LiquidityMiningContractABI, split[split.length - 1]);
-        promises.push(window.setStakingManagerData(element, stakingManager, blockTiers, active, only));
+        var liquidityMiningContractAddress = split[split.length - 1];
+        if(elem.name.indexOf('liquiditymining.authorized.') === -1) {
+            var stakingManager = window.newContract(window.context.LiquidityMiningContractABI, liquidityMiningContractAddress);
+            promises.push(window.setStakingManagerData(element, stakingManager, blockTiers, active, only));
+        } else {
+            var stakingManager = window.newContract(window.context.LiquidityMiningContractABI, liquidityMiningContractAddress);
+            promises.push(window.setNewLiquidityMiningManagerData(element, stakingManager, blockTiers, active, only));
+        }
     }
     stakingData = (await Promise.all(promises)).filter(it => it !== undefined && it !== null);
     return { stakingData, blockTiers };
@@ -1826,6 +1835,65 @@ window.setStakingManagerData = async function setStakingManagerData(element, sta
     }
     stakingManagerData.pairs = pairs;
     stakingManagerData.tiers = tiers;
+    stakingManagerData.old = true;
+    return stakingManagerData;
+};
+
+window.setNewLiquidityMiningManagerData = async function setNewLiquidityMiningManagerData(element, stakingManager, blockTiers, active, only) {
+    var stakingManagerData = {
+        stakingManager,
+        active,
+        blockTiers
+    };
+    stakingManagerData.mainToken = await window.loadTokenInfos(element.token.options.address);
+    stakingManagerData.rewardToken = stakingManagerData.mainToken;
+    try {
+        stakingManagerData.mainToken = await window.loadTokenInfos(await window.blockchainCall(stakingManager.methods.tokenAddress));
+        stakingManagerData.rewardToken = await window.loadTokenInfos(await window.blockchainCall(stakingManager.methods.rewardTokenAddress));
+    } catch (e) {}
+    stakingManagerData.startBlock = await window.blockchainCall(stakingManager.methods.startBlock);
+    try {
+        stakingManagerData.endBlock = await window.blockchainCall(stakingManager.methods.endBlock);
+        if (active) {
+            var currentBlock = await window.web3.eth.getBlockNumber();
+            if (currentBlock > parseInt(stakingManagerData.endBlock)) {
+                stakingManagerData.active = false;
+            }
+        }
+    } catch (e) {}
+    if (only !== undefined && only !== null && stakingManagerData.active !== only) {
+        return;
+    }
+    var blockNumber = await window.web3.eth.getBlockNumber();
+    stakingManagerData.started = blockNumber > parseInt(stakingManagerData.startBlock);
+    stakingManagerData.terminated = stakingManagerData.endBlock && blockNumber > parseInt(stakingManagerData.endBlock);
+    stakingManagerData.running = stakingManagerData.started && !stakingManagerData.terminated;
+    var rawTiers = await window.blockchainCall(stakingManager.methods.tierData);
+    var pools = await window.blockchainCall(stakingManager.methods.tokens);
+    stakingManagerData.startBlock = await window.blockchainCall(stakingManager.methods.startBlock);
+    var pairs = await window.loadTokenInfos(pools, window.wethAddress);
+    for (var i in pairs) {
+        pairs[i].amount = await window.blockchainCall(stakingManager.methods.totalPoolAmount, i);
+    }
+    var tiers = [];
+    for (var i = 0; i < rawTiers[0].length; i++) {
+        var tier = {
+            blockNumber: rawTiers[0][i],
+            percentage: 100 * parseFloat(rawTiers[1][i]) / parseFloat(rawTiers[2][i]),
+            rewardSplitTranche: rawTiers[3][i],
+            time: window.calculateTimeTier(rawTiers[0][i]),
+            tierKey: window.getTierKey(rawTiers[0][i])
+        };
+        var stakingInfo = await window.blockchainCall(stakingManager.methods.getStakingInfo, i);
+        tier.minCap = stakingInfo[0];
+        tier.hardCap = stakingInfo[1];
+        tier.remainingToStake = stakingInfo[2];
+        tier.staked = window.web3.utils.toBN(tier.hardCap).sub(window.web3.utils.toBN(tier.remainingToStake)).toString()
+        tiers.push(tier);
+    }
+    stakingManagerData.pairs = pairs;
+    stakingManagerData.tiers = tiers;
+    stakingManagerData.old = false;
     return stakingManagerData;
 };
 
@@ -2289,11 +2357,11 @@ window.tryLoadStaking = async function tryLoadStaking(view, stakingAddressInput)
             stakingData: await window.setStakingManagerData(element, stakingManager, blockTiers, active)
         };
         ReactModuleLoader.load({
-            modules: ['spa/stake'],
+            modules: ['spa/stake', 'spa/stake_old'],
             callback: function() {
                 view.setState({
                     optionalPage: {
-                        component: window.Stake,
+                        component: props.stakingData.old ? window.StakeOld : window.Stake,
                         props
                     }
                 });
@@ -2362,4 +2430,26 @@ window.encodeStructArrayABI = function encodeStructArrayABI(types, inputs) {
         results.push(w3.eth.abi.encodeParameters(types, input).substring(2));
     }
     return header + results.join('');
+};
+
+window.onTextChange = function onTextChange(e) {
+    window.preventItem(e);
+    var view = $(e.currentTarget).findReactComponent();
+    if (view.state && view.state.performing) {
+        return;
+    }
+    var value = e.currentTarget.value;
+    var callback = view[e.currentTarget.dataset.action];
+    var timeVar = e.currentTarget.dataset.action + "Timeout";
+    view[timeVar] && window.clearTimeout(view[timeVar]);
+    view[timeVar] = setTimeout(() => callback(value), window.context.inputTimeout);
+};
+
+window.preventItem = function preventItem(e) {
+    if (!e) {
+        return;
+    }
+    e.preventDefault && e.preventDefault(true);
+    e.stopPropagation && e.stopPropagation(true);
+    return e || true;
 };

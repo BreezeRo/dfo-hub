@@ -90,9 +90,6 @@ var ScriptLoader = function() {
                 if (window.scriptsLoaded === undefined) {
                     window.scriptsLoaded = []
                 }
-                if (scriptToLoad !== undefined && scriptToLoad !== null && scriptToLoad !== '') {
-                    window.scriptsLoaded.push(scriptToLoad.replace(context.baseURL, ""))
-                }
                 context.loadScript()
             }
             script.onerror = function(e) {
@@ -131,7 +128,7 @@ var ScriptLoader = function() {
                 var newScript = document.createElement('script')
                 newScript.type = 'text/javascript'
                 var transform = Babel.transform(code, {
-                    presets: ['es2015', 'es2015-loose', 'react'],
+                    presets: ['es2015', 'es2015-loose', 'react', 'stage-0'],
                     sourceMaps: true
                 });
                 var evaluation = transform.code;
@@ -143,9 +140,6 @@ var ScriptLoader = function() {
                     context.log('Loaded script "' + src + '".')
                     if (window.scriptsLoaded === undefined) {
                         window.scriptsLoaded = []
-                    }
-                    if (src !== undefined && src !== null && src !== '') {
-                        window.scriptsLoaded.push(src.replace(context.baseURL, ""))
                     }
                     context.loadScript()
                 }
@@ -216,9 +210,10 @@ var ScriptLoader = function() {
                 }
             }
             if (window.scriptsLoaded === undefined) {
-                window.scriptsLoaded = []
+                window.scriptsLoaded = [script.src.replace(context.baseURL, "")]
+                return true;
             }
-            var found = undefined
+            var found = undefined;
             for (var i in window.scriptsLoaded) {
 
                 if (window.scriptsLoaded[i].replace(context.baseURL, "") === script.src.replace(context.baseURL, "")) {
@@ -228,11 +223,11 @@ var ScriptLoader = function() {
             }
             if (found !== undefined) {
                 if (context.removeOld === true || context.removeOldStyles === true) {
-                    window.scriptsLoaded.splice(found, 1)
                     return true
                 }
                 return false
             }
+            window.scriptsLoaded.push(script.src.replace(context.baseURL, ""));
             return true
         }
 
@@ -293,14 +288,15 @@ var ScriptLoader = function() {
 
         context.tryCallback = function() {
             if (context.m_js_files.length === 0 && context.m_css_files.length === 0 && context.callback) {
-                context.callback()
+                setTimeout(context.callback);
             }
+            ScriptLoader.queue.splice(0, 1);
+            return setTimeout(ScriptLoader.dequeue);
         }
 
         context.load = function() {
             if (context.scripts.length === 0) {
-                context.tryCallback()
-                return
+                context.tryCallback();
             }
             for (var i = 0; i < context.scripts.length; ++i) {
                 var script = context.scripts[i]
@@ -430,8 +426,11 @@ var ScriptLoader = function() {
     }
 
     return {
-        load: function(data) {
-            new ScriptLoaderInternal(data)
+        load(data) {
+            (ScriptLoader.queue = ScriptLoader.queue || []).push(data);
+            ScriptLoader.queue.length === 1 && ScriptLoader.dequeue();
+        }, dequeue() {
+            ScriptLoader.queue.length > 0 && new ScriptLoaderInternal(ScriptLoader.queue[0]);
         }
     }
 }()
