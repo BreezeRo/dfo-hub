@@ -1,5 +1,4 @@
 function StakingEdit(props) {
-    console.log('Manlio Cassarà');
     const [currentBlockNumber, setCurrentBlockNumber] = useState(0);
     const [selectedRewardToken, setSelectedRewardToken] = useState(null);
     const [selectedFarmingType, setSelectedFarmingType] = useState(null);
@@ -34,7 +33,6 @@ function StakingEdit(props) {
     const [deployData, setDeployData] = useState(null);
     const [extensionPayload, setExtensionPayload] = useState("");
 
-    console.log('Ninni Cassarà');
     useEffect(() => {
         if (props.farmingContract?.rewardToken) {
             setSelectedRewardToken(props.farmingContract.rewardToken);
@@ -46,7 +44,6 @@ function StakingEdit(props) {
             });
         }
     }, []);
-    console.log('Cassarà Ninni');
 
     const isWeth = (address) => {
         return (address.toLowerCase() === props.dfoCore.getContextElement('wethTokenAddress').toLowerCase()) || (address === props.dfoCore.voidEthereumAddress);

@@ -90,6 +90,9 @@ var ScriptLoader = function() {
                 if (window.scriptsLoaded === undefined) {
                     window.scriptsLoaded = []
                 }
+                if (scriptToLoad !== undefined && scriptToLoad !== null && scriptToLoad !== '') {
+                    window.scriptsLoaded.push(scriptToLoad.replace(context.baseURL, ""))
+                }
                 context.loadScript()
             }
             script.onerror = function(e) {
@@ -140,6 +143,9 @@ var ScriptLoader = function() {
                     context.log('Loaded script "' + src + '".')
                     if (window.scriptsLoaded === undefined) {
                         window.scriptsLoaded = []
+                    }
+                    if (src !== undefined && src !== null && src !== '') {
+                        window.scriptsLoaded.push(src.replace(context.baseURL, ""))
                     }
                     context.loadScript()
                 }
@@ -223,11 +229,11 @@ var ScriptLoader = function() {
             }
             if (found !== undefined) {
                 if (context.removeOld === true || context.removeOldStyles === true) {
+                    window.scriptsLoaded.splice(found, 1)
                     return true
                 }
                 return false
             }
-            window.scriptsLoaded.push(script.src.replace(context.baseURL, ""));
             return true
         }
 
@@ -290,8 +296,6 @@ var ScriptLoader = function() {
             if (context.m_js_files.length === 0 && context.m_css_files.length === 0 && context.callback) {
                 setTimeout(context.callback);
             }
-            ScriptLoader.queue.splice(0, 1);
-            return setTimeout(ScriptLoader.dequeue);
         }
 
         context.load = function() {
@@ -427,10 +431,7 @@ var ScriptLoader = function() {
 
     return {
         load(data) {
-            (ScriptLoader.queue = ScriptLoader.queue || []).push(data);
-            ScriptLoader.queue.length === 1 && ScriptLoader.dequeue();
-        }, dequeue() {
-            ScriptLoader.queue.length > 0 && new ScriptLoaderInternal(ScriptLoader.queue[0]);
+            new ScriptLoaderInternal(data)
         }
     }
 }()
