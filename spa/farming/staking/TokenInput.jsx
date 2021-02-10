@@ -5,7 +5,7 @@ var TokenInput = React.createClass({
     render() {
         var props = this.props;
         const { onClick, placeholder, text, width, label } = props;
-        tokenAddress = (this.state && this.state.tokenAddress) || "";
+        var tokenAddress = (this.state && this.state.tokenAddress) || "";
         return <div className={`row mb-3 w-${width || 100}`}>
             { label && <div className="col-12"><h6><b>{label}</b></h6></div> }
             <div className="col-12 flex">

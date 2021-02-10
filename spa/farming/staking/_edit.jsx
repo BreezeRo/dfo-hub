@@ -1,4 +1,4 @@
-var StakingEdit = React.createClass({
+var _StakingEdit = React.createClass({
     requiredScripts: [
         'spa/loaderMinimino.jsx',
         'spa/uniswapTokenPicker.jsx'
