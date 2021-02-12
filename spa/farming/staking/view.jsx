@@ -1,10 +1,7 @@
 var StakingView = React.createClass({
     requiredScripts: [
         'spa/loaderMinimino.jsx',
-        'spa/farming/staking/edit.jsx',
-        'spa/farming/staking/Input.jsx',
-        'spa/farming/staking/Coin.jsx',
-        'spa/farming/staking/TokenInput.jsx'
+        'spa/farming/staking/edit.jsx'
     ],
     requiredModules: [
         'spa/stake',

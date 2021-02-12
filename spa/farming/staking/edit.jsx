@@ -1,4 +1,4 @@
-function StakingEdit(props) {
+function StakingEditWrapped(props) {
     const [currentBlockNumber, setCurrentBlockNumber] = useState(0);
     const [selectedRewardToken, setSelectedRewardToken] = useState(null);
     const [selectedFarmingType, setSelectedFarmingType] = useState(null);
@@ -785,13 +785,13 @@ function StakingEdit(props) {
     );
 }
 
-/*var StakingEdit = React.createClass({
+var StakingEdit = React.createClass({
     requiredModules : [
         'spa/farming/staking/Input.jsx',
         'spa/farming/staking/Coin.jsx',
         'spa/farming/staking/TokenInput.jsx'
     ],
     render() {
-        return renderStakingEdit(this.props);
+        return <StakingEditWrapped/>;
     }
-});*/
+});

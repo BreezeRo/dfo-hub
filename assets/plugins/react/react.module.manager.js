@@ -19,7 +19,7 @@ var ReactModuleManager = function() {
         var elementName = undefined
         var reactClass = typeof viewName !== 'string' ? viewName : window[viewName] !== undefined ? window[viewName] : undefined
 
-        if (reactClass !== undefined && reactClass.prototype.constructor.displayName !== undefined) {
+        if (reactClass !== undefined && reactClass.prototype && reactClass.prototype.constructor.displayName !== undefined) {
             elementName = reactClass.prototype.constructor.displayName
             if (reactClass.prototype.oldRender === undefined) {
                 var requireCalled = true;
@@ -244,7 +244,7 @@ var ReactModuleManager = function() {
         var element;
         var involveLoadedModules = true
 
-        if (typeof viewName !== 'string' || window[viewName] === undefined) {
+        if (typeof viewName === 'symbol' || typeof viewName !== 'string' || window[viewName] === undefined) {
             element = React.createElement2.apply(React, callerArguments)
             involveLoadedModules = typeof viewName !== 'string'
             if (elementName !== undefined) {
@@ -264,13 +264,13 @@ var ReactModuleManager = function() {
     }
     return {
         createElement: function(viewName) {
-            return viewName === React.Fragment ? React.createElement2.apply(React, arguments) : createElementInternal({
+            return createElementInternal({
                 viewName,
                 arguments: arguments
             })
         },
         createElementNew: function(viewName) {
-            return viewName === React.Fragment ? React.createElement2.apply(React, arguments) : createElementInternal({
+            return createElementInternal({
                 viewName,
                 createNew: true,
                 arguments: arguments
